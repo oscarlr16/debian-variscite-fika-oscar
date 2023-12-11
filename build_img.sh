@@ -102,7 +102,7 @@ function create_image () {
     # Create uboot partition
     create_partition uboot      ${BOOTLOADER_START}     ${BOOTLOADER_END}
     create_partition uboot_env  ${BOOTLOADER_ENV_START} ${BOOTLOADER_ENV_END}
-    declare -i env_partition=${PARTITIONS}+1
+    declare -i env_partition=${PARTITIONS}
     parted ${IMAGE_TARGET} -f set ${env_partition} boot on
     create_partition root_a     ${ROOT_A_START}         ${ROOT_A_END}
     create_partition root_b     ${ROOT_B_START}         ${ROOT_B_END}
