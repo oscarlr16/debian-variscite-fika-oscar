@@ -14,7 +14,6 @@ kernel-src/scripts/Makefile.lib
 kernel-src/scripts/Makefile.modfinal
 kernel-src/scripts/Makefile.modinst
 kernel-src/scripts/Makefile.modpost
-kernel-src/scripts/Makefile.modsign
 kernel-src/scripts/Makefile.package
 kernel-src/scripts/Makefile.ubsan
 kernel-src/scripts/basic/fixdep
@@ -24,8 +23,6 @@ kernel-src/scripts/checkversion.pl
 kernel-src/scripts/depmod.sh
 kernel-src/scripts/extract-cert
 kernel-src/scripts/gcc-goto.sh
-kernel-src/scripts/gcc-plugin.sh
-kernel-src/scripts/gcc-version.sh
 kernel-src/scripts/gcc-x86_32-has-stack-protector.sh
 kernel-src/scripts/gcc-x86_64-has-stack-protector.sh
 kernel-src/scripts/headers_install.sh
@@ -37,9 +34,11 @@ kernel-src/scripts/makelst
 kernel-src/scripts/mksysmap
 kernel-src/scripts/mkuboot.sh
 kernel-src/scripts/mod/modpost
-kernel-src/scripts/module-common.lds
-kernel-src/scripts/namespace.pl
+kernel-src/scripts/module.lds
+kernel-src/scripts/module.lds.S
+kernel-src/scripts/modules-check.sh
 kernel-src/scripts/patch-kernel
+kernel-src/scripts/prune-kernel
 kernel-src/scripts/recordmcount.pl
 kernel-src/scripts/setlocalversion
 kernel-src/scripts/subarch.include
