@@ -760,8 +760,8 @@ EOF
 	chmod +x header-stage
 	chroot ${ROOTFS_BASE} /header-stage
 
-	cp ${G_VARISCITE_PATH}/../meticulous-ui.deb ${ROOTFS_BASE}/tmp/meticulous-ui.deb
-	G_USER_PACKAGES="${G_USER_PACKAGES} /tmp/meticulous-ui.deb"
+	curl -s https://dial-app.meticuloushome.com/prod/meticulous-ui-latest.deb -o ${ROOTFS_BASE}/tmp/meticulous-ui-latest.deb
+	G_USER_PACKAGES="${G_USER_PACKAGES} /tmp/meticulous-ui-latest.deb"
 
 	#Install user pacakges if any
 	if [ "${G_USER_PACKAGES}" != "" ] ; then
@@ -771,7 +771,7 @@ EOF
 		echo "#!/bin/bash
 		# update packages
 		apt-get update
-		apt-get upgrade
+		apt-get -y upgrade
 
 		# install all user packages
 		apt-get -y install ${G_USER_PACKAGES}

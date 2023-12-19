@@ -253,9 +253,13 @@ function pr_debug() {
 # $4 - commit id
 function get_git_src()
 {
-	# clone src code
-	git clone ${1} -b ${2} ${3}
+	if ! [ -d $3 ]; then
+		# clone src code
+		git clone ${1} -b ${2} ${3}
+	fi
 	cd ${3}
+	git fetch origin
+	git checkout origin/${2} -B ${2} -f
 	git reset --hard ${4}
 	cd -
 }
@@ -738,21 +742,18 @@ function cmd_make_deploy()
 	fi
 
 	# get U-Boot repository
-	(( `ls ${G_UBOOT_SRC_DIR} 2>/dev/null | wc -l` == 0 )) && {
-		pr_info "Get U-Boot repository";
-		get_git_src ${G_UBOOT_GIT} ${G_UBOOT_BRANCH} \
-			${G_UBOOT_SRC_DIR} ${G_UBOOT_REV}
-	};
+	pr_info "Get U-Boot repository";
+	get_git_src ${G_UBOOT_GIT} ${G_UBOOT_BRANCH} \
+		${G_UBOOT_SRC_DIR} ${G_UBOOT_REV}
 
 	# get kernel repository
-	(( `ls ${G_LINUX_KERNEL_SRC_DIR} 2>/dev/null | wc -l` == 0 )) && {
-		pr_info "Get kernel repository";
-		get_git_src ${G_LINUX_KERNEL_GIT} ${G_LINUX_KERNEL_BRANCH} \
-			${G_LINUX_KERNEL_SRC_DIR} ${G_LINUX_KERNEL_REV}
-		if kernel_is_5_10; then
-			patch -p1 < ${G_VARISCITE_PATH}/0001-linux-kernel-headers-Fix-missing-scripts-module-comm.patch
-		fi
-	};
+	pr_info "Get kernel repository";
+	get_git_src ${G_LINUX_KERNEL_GIT} ${G_LINUX_KERNEL_BRANCH} \
+		${G_LINUX_KERNEL_SRC_DIR} ${G_LINUX_KERNEL_REV}
+	if kernel_is_5_10; then
+		patch -p1 < ${G_VARISCITE_PATH}/0001-linux-kernel-headers-Fix-missing-scripts-module-comm.patch
+	fi
+	
 	if [ ! -z "${G_BCM_FW_GIT}" ]; then
 		# get bcm firmware repository
 		(( `ls ${G_BCM_FW_SRC_DIR}  2>/dev/null | wc -l` == 0 )) && {
