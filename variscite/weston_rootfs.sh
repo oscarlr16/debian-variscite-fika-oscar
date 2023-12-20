@@ -735,9 +735,21 @@ EOF
 	ln -s /lib/systemd/system/meticulous-ui.service \
 		${ROOTFS_BASE}/etc/systemd/system/multi-user.target.wants/meticulous-ui.service
 
+	install -m 0644 ${G_VARISCITE_PATH}/meticulous-backend.service \
+		${ROOTFS_BASE}/lib/systemd/system
+	ln -s /lib/systemd/system/meticulous-backend.service \
+		${ROOTFS_BASE}/etc/systemd/system/multi-user.target.wants/meticulous-backend.service
 
 	# install python
 	tar xf ${G_VARISCITE_PATH}/python/python3.12.tar.gz -C ${ROOTFS_BASE}
+
+	## Reinstall pip3.12 as it is usually expecting python at the wrong location
+	rm -rf ${ROOTFS_BASE}/usr/lib/python3.12/site-packages/pip*
+	chroot ${ROOTFS_BASE} bash -c "python3.12 -m ensurepip --upgrade --altinstall"
+
+	# Install python requirements for meticulous
+	cp ${G_VARISCITE_PATH}/python-requirements.txt /tmp/python-requirements.txt
+	chroot ${ROOTFS_BASE} bash -c "pip3.12 install -r /tmp/python-requirements.txt"
 
 	# we don't want systemd to handle the power key
 	echo "HandlePowerKey=ignore" >> ${ROOTFS_BASE}/etc/systemd/logind.conf
