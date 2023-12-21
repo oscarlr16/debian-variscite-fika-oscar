@@ -748,8 +748,8 @@ EOF
 	chroot ${ROOTFS_BASE} bash -c "python3.12 -m ensurepip --upgrade --altinstall"
 
 	# Install python requirements for meticulous
-	cp ${G_VARISCITE_PATH}/python-requirements.txt /tmp/python-requirements.txt
-	chroot ${ROOTFS_BASE} bash -c "pip3.12 install -r /tmp/python-requirements.txt"
+	cp ${G_VARISCITE_PATH}/python-requirements.txt ${ROOTFS_BASE}/tmp/python-requirements.txt
+	chroot ${ROOTFS_BASE} bash -c "python3.12 -m pip install -r /tmp/python-requirements.txt"
 
 	# we don't want systemd to handle the power key
 	echo "HandlePowerKey=ignore" >> ${ROOTFS_BASE}/etc/systemd/logind.conf
