@@ -51,7 +51,7 @@ readonly G_CROSS_COMPILER_32BIT_PREFIX="arm-linux-gnueabihf-"
 readonly G_CROSS_COMPILER_JOPTION="-j`nproc`"
 
 #### user rootfs packages ####
-declare -g G_USER_PACKAGES="ydotool git"
+declare -g G_USER_PACKAGES="git avahi-daemon"
 
 export LC_ALL=C
 
