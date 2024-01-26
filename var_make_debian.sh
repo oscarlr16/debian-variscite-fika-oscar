@@ -41,8 +41,6 @@ readonly G_CROSS_COMPILER_32BIT_PREFIX="arm-linux-gnueabihf-"
 readonly G_CROSS_COMPILER_JOPTION="-j`nproc`"
 
 #### user rootfs packages ####
-declare -g G_USER_PACKAGES="git avahi-daemon"
-
 export LC_ALL=C
 
 #### Input params ####
@@ -762,11 +760,6 @@ function cmd_make_rootfs()
 	if [ ! -z "${G_BCM_FW_GIT}" ]; then
 		make_bcm_fw ${G_BCM_FW_SRC_DIR} ${G_ROOTFS_DIR}
 	fi
-
-	# make meticulous weston rootfs
-	cd ${G_ROOTFS_DIR}
-	make_meticulous_weston_rootfs ${G_ROOTFS_DIR}
-	cd -
 
 	# pack full rootfs
 	make_tarball ${G_ROOTFS_DIR} ${G_ROOTFS_TARBALL_PATH}
