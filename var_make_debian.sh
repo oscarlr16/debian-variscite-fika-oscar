@@ -1,14 +1,5 @@
 #!/bin/bash
 # It is designed to build Debian Linux for Variscite iMX modules
-# prepare host OS system:
-#  sudo apt-get install binfmt-support qemu qemu-user-static debootstrap kpartx
-#  sudo apt-get install lvm2 dosfstools gpart binutils git lib32ncurses5-dev python-m2crypto
-#  sudo apt-get install gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat libsdl1.2-dev
-#  sudo apt-get install autoconf libtool libglib2.0-dev libarchive-dev
-#  sudo apt-get install python-git xterm sed cvs subversion coreutils texi2html
-#  sudo apt-get install docbook-utils python-pysqlite2 help2man make gcc g++ desktop-file-utils libgl1-mesa-dev
-#  sudo apt-get install libglu1-mesa-dev mercurial automake groff curl lzop asciidoc u-boot-tools mtd-utils
-#
 
 # -e  Exit immediately if a command exits with a non-zero status.
 set -e
@@ -26,7 +17,6 @@ readonly LOOP_MAJOR=7
 # default mirror
 readonly DEB_RELEASE="bullseye"
 readonly DEF_ROOTFS_TARBALL_NAME="rootfs.tar.gz"
-readonly DEF_CONSOLE_ROOTFS_TARBALL_NAME="console_rootfs.tar.gz"
 
 # base paths
 readonly DEF_BUILDENV="${ABSOLUTE_DIRECTORY}"
@@ -85,10 +75,8 @@ function usage()
 	echo "       modules     -- build or rebuild the Linux kernel modules & headers and install them in the rootfs dir"
 	echo "       rootfs      -- build or rebuild the Debian root filesystem and create rootfs.tar.gz"
 	echo "                       (including: make & install Debian packages, firmware and kernel modules & headers)"
-	echo "       rubi        -- generate or regenerate rootfs.ubi.img image from rootfs folder "
 	echo "       rtar        -- generate or regenerate rootfs.tar.gz image from the rootfs folder"
 	echo "       clean       -- clean all build artifacts (without deleting sources code or resulted images)"
-	echo "       sdcard      -- create a bootable SD card"
 	echo "  -o|--output -- custom select output directory (default: \"${PARAM_OUTPUT_DIR}\")"
 	echo "  -d|--dev    -- specify SD card device (exmple: -d /dev/sde)"
 	echo "  --debug     -- enable debug mode for this script"
@@ -211,7 +199,6 @@ echo
 
 ## declarate dynamic variables ##
 readonly G_ROOTFS_TARBALL_PATH="${PARAM_OUTPUT_DIR}/${DEF_ROOTFS_TARBALL_NAME}"
-readonly G_CONSOLE_ROOTFS_TARBALL_PATH="${PARAM_OUTPUT_DIR}/${DEF_CONSOLE_ROOTFS_TARBALL_NAME}"
 
 ###### local functions ######
 
@@ -538,72 +525,6 @@ function make_uboot()
 	cp ${DEF_SRC_DIR}/imx-mkimage/iMX8M/flash.bin \
 		${DEF_SRC_DIR}/imx-mkimage/${G_UBOOT_NAME_FOR_EMMC}
 	cp ${G_UBOOT_NAME_FOR_EMMC} ${2}/${G_UBOOT_NAME_FOR_EMMC}
-}
-
-# make *.ubi image from rootfs
-# params:
-#  $1 -- path to rootfs dir
-#  $2 -- tmp dir
-#  $3 -- output dir
-#  $4 -- ubi file name
-function make_ubi() {
-	readonly local _rootfs=${1};
-	readonly local _tmp=${2};
-	readonly local _output=${3};
-	readonly local _ubi_file_name=${4};
-
-	readonly local UBI_CFG="${_tmp}/ubi.cfg"
-	readonly local UBIFS_IMG="${_tmp}/rootfs.ubifs"
-	readonly local UBI_IMG="${_output}/${_ubi_file_name}"
-	readonly local UBIFS_ROOTFS_DIR="${DEF_BUILDENV}/rootfs_ubi_tmp"
-
-	rm -rf ${UBIFS_ROOTFS_DIR}
-	cp -a ${_rootfs} ${UBIFS_ROOTFS_DIR}
-
-	# prepare qemu 32bit
-	if [ ! -f "${UBIFS_ROOTFS_DIR}/usr/bin/qemu-arm-static" ]; then
-		cp "${G_VARISCITE_PATH}/qemu_32bit/qemu-arm-static" "${UBIFS_ROOTFS_DIR}/usr/bin/qemu-arm-static"
-	fi
-
-## ubifs rootfs clenup command
-echo "#!/bin/bash
-apt-get clean
-rm -rf /tmp/*
-rm -f cleanup
-" > ${UBIFS_ROOTFS_DIR}/cleanup
-
-	# clean all packages
-	pr_info "ubifs rootfs: clean"
-	chmod +x ${UBIFS_ROOTFS_DIR}/cleanup
-	chroot ${UBIFS_ROOTFS_DIR} /cleanup
-	rm ${UBIFS_ROOTFS_DIR}/usr/bin/qemu-arm-static
-
-	prepare_ubifs_rootfs ${UBIFS_ROOTFS_DIR}
-	# gnerate ubifs file
-	pr_info "Generate ubi config file: ${UBI_CFG}"
-cat > ${UBI_CFG} << EOF
-[ubifs]
-mode=ubi
-image=${UBIFS_IMG}
-vol_id=0
-vol_type=dynamic
-vol_name=rootfs
-vol_flags=autoresize
-EOF
-	# delete previus images
-	rm -f ${UBI_IMG}
-	rm -f ${UBIFS_IMG}
-
-	pr_info "Creating $UBIFS_IMG image"
-	mkfs.ubifs -x zlib -m 2048  -e 124KiB -c 3965 -r ${UBIFS_ROOTFS_DIR} $UBIFS_IMG
-
-	pr_info "Creating $UBI_IMG image"
-	ubinize -o ${UBI_IMG} -m 2048 -p 128KiB -s 2048 -O 2048 ${UBI_CFG}
-
-	# delete unused file
-	rm -f ${UBIFS_IMG}
-	rm -f ${UBI_CFG}
-	return 0;
 }
 
 # clean U-Boot
@@ -936,16 +857,6 @@ function cmd_make_rfs_tar()
 	make_tarball ${G_ROOTFS_DIR} ${G_ROOTFS_TARBALL_PATH}
 }
 
-function cmd_make_sdcard()
-{
-	if [ "${MACHINE}" = "imx6ul-var-dart" ] ||
-	   [ "${MACHINE}" = "var-som-mx7" ]; then
-		make_x11_sdcard ${PARAM_BLOCK_DEVICE} ${PARAM_OUTPUT_DIR}
-	else
-		make_weston_sdcard ${PARAM_BLOCK_DEVICE} ${PARAM_OUTPUT_DIR}
-	fi
-}
-
 function cmd_make_bcmfw()
 {
 	make_bcm_fw ${G_BCM_FW_SRC_DIR} ${G_ROOTFS_DIR}
@@ -1009,13 +920,6 @@ case $PARAM_CMD in
 		;;
 	firmware )
 		cmd_make_firmware
-		;;
-
-	sdcard )
-		cmd_make_sdcard
-		;;
-	rubi )
-		cmd_make_rfs_ubi
 		;;
 	rtar )
 		cmd_make_rfs_tar
