@@ -31,7 +31,8 @@ function make_debian_weston_rootfs()
 	#Package the base Debian image into a tar.gz file
 	pr_info "Packaging the base Debian image"
 	if [ -d "${ROOTFS_BASE}" ] && [ "$(ls -A ${ROOTFS_BASE})" ]; then
-    	tar czvf ${PARAM_OUTPUT_DIR}/rootfs-base.tar.gz -C ${ROOTFS_BASE} .
+    	umount ${ROOTFS_BASE}/{sys,proc,dev/pts,dev} 2>/dev/null || true
+    	tar czvf ${PARAM_OUTPUT_DIR}/rootfs-base.tar.gz --exclude=sys --exclude=proc --exclude=dev ${ROOTFS_BASE}
 	else
     	echo "Error: The directory ${ROOTFS_BASE}  does not exist or is empty."
     	exit 1
@@ -44,8 +45,13 @@ function make_variscite_weston_rootfs()
 	
 	# Unpack the base image to continue with customizations
 	pr_info "Unpacking the base Debian image."
+	umount ${ROOTFS_BASE}/{sys,proc,dev/pts,dev} 2>/dev/null || true
 	tar xzvf ${PARAM_OUTPUT_DIR}/rootfs-base.tar.gz -C ${ROOTFS_BASE}
 
+	mount -o bind /proc ${ROOTFS_BASE}/proc
+	mount -o bind /dev ${ROOTFS_BASE}/dev
+	mount -o bind /dev/pts ${ROOTFS_BASE}/dev/pts
+	mount -o bind /sys ${ROOTFS_BASE}/sys
 
 	# delete unused folder
 	chroot $ROOTFS_BASE rm -rf ${ROOTFS_BASE}/debootstrap
@@ -815,166 +821,5 @@ EOF
 	cp ${G_VARISCITE_PATH}/10-imx.rules ${ROOTFS_BASE}/etc/udev/rules.d
 	cp ${G_VARISCITE_PATH}/automount.rules ${ROOTFS_BASE}/etc/udev/rules.d
 
-	if [ "${MACHINE}" = "imx8m-var-dart" ]; then
-		cp ${G_VARISCITE_PATH}/${MACHINE}/*.rules ${ROOTFS_BASE}/etc/udev/rules.d
-	fi
-}
-
-# make SD card for device
-# $1 -- block device
-# $2 -- output images dir
-function make_weston_sdcard()
-{
-	readonly local LPARAM_BLOCK_DEVICE=${1}
-	readonly local LPARAM_OUTPUT_DIR=${2}
-	readonly local P1_MOUNT_DIR="${G_TMP_DIR}/p1"
-	readonly local DEBIAN_IMAGES_TO_ROOTFS_POINT="opt/images/Debian"
-
-	readonly local BOOTLOAD_RESERVE_SIZE=8
-	readonly local SPARE_SIZE=4
-
-	[ "${LPARAM_BLOCK_DEVICE}" = "na" ] && {
-		pr_error "No valid block device: ${LPARAM_BLOCK_DEVICE}"
-		return 1;
-	};
-
-	local part=""
-	if [ `echo ${LPARAM_BLOCK_DEVICE} | grep -c mmcblk` -ne 0 ] \
-		|| [[ ${LPARAM_BLOCK_DEVICE} == *"loop"* ]] ; then
-		part="p"
-	fi
-
-	# Check that we're using a valid device
-	if ! check_sdcard ${LPARAM_BLOCK_DEVICE}; then
-		return 1
-	fi
-
-	for ((i=0; i<10; i++))
-	do
-		if [ `mount | grep -c ${LPARAM_BLOCK_DEVICE}${part}$i` -ne 0 ]; then
-			umount ${LPARAM_BLOCK_DEVICE}${part}$i
-		fi
-	done
-
-	function format_sdcard
-	{
-		pr_info "Formating SD card partitions"
-		mkfs.ext4 ${LPARAM_BLOCK_DEVICE}${part}1 -L rootfs
-	}
-
-	function flash_u-boot
-	{
-		pr_info "Flashing U-Boot"
-		dd if=${LPARAM_OUTPUT_DIR}/${G_UBOOT_NAME_FOR_EMMC} \
-		of=${LPARAM_BLOCK_DEVICE} bs=1K seek=${BOOTLOADER_OFFSET}; sync
-	}
-
-	function flash_sdcard
-	{
-		pr_info "Flashing \"rootfs\" partition"
-		tar -xpf ${LPARAM_OUTPUT_DIR}/${DEF_ROOTFS_TARBALL_NAME} \
-			-C ${P1_MOUNT_DIR}/
-	}
-
-	function copy_debian_images
-	{
-		mkdir -p ${P1_MOUNT_DIR}/${DEBIAN_IMAGES_TO_ROOTFS_POINT}
-
-		pr_info "Copying Debian images to /${DEBIAN_IMAGES_TO_ROOTFS_POINT}"
-		cp ${LPARAM_OUTPUT_DIR}/${DEF_ROOTFS_TARBALL_NAME} \
-			${P1_MOUNT_DIR}/${DEBIAN_IMAGES_TO_ROOTFS_POINT}/${DEF_ROOTFS_TARBALL_NAME}
-
-		pr_info "Copying MMC U-Boot to /${DEBIAN_IMAGES_TO_ROOTFS_POINT}"
-		if [ ${MACHINE} = "imx8mq-var-dart" ]; then
-			cp ${LPARAM_OUTPUT_DIR}/imx-boot-* \
-				${P1_MOUNT_DIR}/${DEBIAN_IMAGES_TO_ROOTFS_POINT}/
-		else
-			cp ${LPARAM_OUTPUT_DIR}/${G_UBOOT_NAME_FOR_EMMC} \
-				${P1_MOUNT_DIR}/${DEBIAN_IMAGES_TO_ROOTFS_POINT}/
-		fi
-	}
-
-	function copy_scripts
-	{
-		pr_info "Copying scripts to /${DEBIAN_IMAGES_TO_ROOTFS_POINT}"
-		cp ${G_VARISCITE_PATH}/mx8_install_debian.sh \
-			${P1_MOUNT_DIR}/usr/sbin/install_debian.sh
-	}
-
-	function ceildiv
-	{
-		local num=$1
-		local div=$2
-		echo $(( (num + div - 1) / div ))
-	}
-
-	# Delete the partitions
-	for ((i=0; i<=10; i++))
-	do
-		if [ -e ${LPARAM_BLOCK_DEVICE}${part}${i} ]; then
-			dd if=/dev/zero of=${LPARAM_BLOCK_DEVICE}${part}$i bs=512 count=1024 2> /dev/null || true
-		fi
-	done
-	sync
-
-	((echo d; echo 1; echo d; echo 2; echo d; echo 3; echo d; echo w) | \
-		fdisk ${LPARAM_BLOCK_DEVICE} &> /dev/null) || true
-	sync
-
-	dd if=/dev/zero of=${LPARAM_BLOCK_DEVICE} bs=1M count=${BOOTLOAD_RESERVE_SIZE}
-	sync; sleep 2
-
-	# Create a new partition table
-	pr_info "Creating new partitions"
-
-	# Get total card size
-	TOTAL_SIZE=`sfdisk -s ${LPARAM_BLOCK_DEVICE}`
-	TOTAL_SIZE=`expr ${TOTAL_SIZE} / 1024`
-	ROOTFS_SIZE=`expr ${TOTAL_SIZE} - ${BOOTLOAD_RESERVE_SIZE} - ${SPARE_SIZE}`
-
-	pr_info "ROOT SIZE=${ROOTFS_SIZE} TOTAl SIZE=${TOTAL_SIZE}"
-
-	BLOCK=`echo ${LPARAM_BLOCK_DEVICE} | cut -d "/" -f 3`
-	SECT_SIZE_BYTES=`cat /sys/block/${BLOCK}/queue/physical_block_size`
-
-	BOOTLOAD_RESERVE_SIZE_BYTES=$((BOOTLOAD_RESERVE_SIZE * 1024 * 1024))
-	ROOTFS_SIZE_BYTES=$((ROOTFS_SIZE * 1024 * 1024))
-
-	PART1_START=`ceildiv ${BOOTLOAD_RESERVE_SIZE_BYTES} ${SECT_SIZE_BYTES}`
-	PART1_SIZE=`ceildiv ${ROOTFS_SIZE_BYTES} ${SECT_SIZE_BYTES}`
-
-sfdisk --force -uS ${LPARAM_BLOCK_DEVICE} &> /dev/null << EOF
-${PART1_START},${PART1_SIZE},83
-EOF
-
-	sleep 2; sync;
-	fdisk -l ${LPARAM_BLOCK_DEVICE}
-
-	sleep 2; sync;
-
-	# Format the partitions
-	format_sdcard
-	sleep 2; sync;
-
-	flash_u-boot
-	sleep 2; sync;
-
-	# Mount the partitions
-	mkdir -p ${P1_MOUNT_DIR}
-	sync
-
-	mount ${LPARAM_BLOCK_DEVICE}${part}1  ${P1_MOUNT_DIR}
-	sleep 2; sync;
-
-	flash_sdcard
-	copy_debian_images
-	copy_scripts
-
-	pr_info "Syncing to SD card..."
-	sync
-	umount ${P1_MOUNT_DIR}
-
-	rm -rf ${P1_MOUNT_DIR}
-
-	pr_info "The SD card is ready"
+	umount ${ROOTFS_BASE}/{sys,proc,dev/pts,dev} 2>/dev/null || true
 }

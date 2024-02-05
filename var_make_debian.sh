@@ -82,7 +82,6 @@ function usage()
 	echo "  deploy and build:                 ./${SCRIPT_NAME} --cmd deploy && sudo ./${SCRIPT_NAME} --cmd all"
 	echo "  make the Linux kernel only:       sudo ./${SCRIPT_NAME} --cmd kernel"
 	echo "  make rootfs only:                 sudo ./${SCRIPT_NAME} --cmd rootfs"
-	echo "  create SD card:                   sudo ./${SCRIPT_NAME} --cmd sdcard --dev /dev/sdX"
 	echo
 }
 
@@ -101,32 +100,17 @@ if [ ! -z "${G_FREERTOS_VAR_SRC_DIR}" ]; then
 fi
 
 # Setup cross compiler path, name, kernel dtb path, kernel image type, helper scripts
-if [ "${ARCH_CPU}" = "64BIT" ]; then
-	G_CROSS_COMPILER_NAME=${G_CROSS_COMPILER_64BIT_NAME}
-	G_EXT_CROSS_COMPILER_LINK=${G_EXT_CROSS_64BIT_COMPILER_LINK}
-	G_CROSS_COMPILER_ARCHIVE=${G_CROSS_COMPILER_ARCHIVE_64BIT}
-	G_CROSS_COMPILER_PREFIX=${G_CROSS_COMPILER_64BIT_PREFIX}
-	ARCH_ARGS="arm64"
-	BUILD_IMAGE_TYPE="Image.gz"
-	KERNEL_BOOT_IMAGE_SRC="arch/arm64/boot/"
-	KERNEL_DTB_IMAGE_PATH="arch/arm64/boot/dts/freescale/"
-	# Include weston backend rootfs helper
-	source ${G_VARISCITE_PATH}/weston_rootfs.sh
-	source ${G_VARISCITE_PATH}/linux-headers_debian_src/create_kernel_tree.sh
-elif [ "${ARCH_CPU}" = "32BIT" ]; then
-	G_CROSS_COMPILER_NAME=${G_CROSS_COMPILER_32BIT_NAME}
-	G_EXT_CROSS_COMPILER_LINK=${G_EXT_CROSS_32BIT_COMPILER_LINK}
-	G_CROSS_COMPILER_ARCHIVE=${G_CROSS_COMPILER_ARCHIVE_32BIT}
-	G_CROSS_COMPILER_PREFIX=${G_CROSS_COMPILER_32BIT_PREFIX}
-	ARCH_ARGS="arm"
-	# Include x11 backend rootfs helper
-	source ${G_VARISCITE_PATH}/console_rootfs.sh
-	source ${G_VARISCITE_PATH}/linux-headers_debian_src/create_kernel_tree_arm.sh
-	source ${G_VARISCITE_PATH}/x11_rootfs.sh
-else
-	echo " Error unknown CPU type"
-	exit 1
-fi
+G_CROSS_COMPILER_NAME=${G_CROSS_COMPILER_64BIT_NAME}
+G_EXT_CROSS_COMPILER_LINK=${G_EXT_CROSS_64BIT_COMPILER_LINK}
+G_CROSS_COMPILER_ARCHIVE=${G_CROSS_COMPILER_ARCHIVE_64BIT}
+G_CROSS_COMPILER_PREFIX=${G_CROSS_COMPILER_64BIT_PREFIX}
+ARCH_ARGS="arm64"
+BUILD_IMAGE_TYPE="Image.gz"
+KERNEL_BOOT_IMAGE_SRC="arch/arm64/boot/"
+KERNEL_DTB_IMAGE_PATH="arch/arm64/boot/dts/freescale/"
+# Include weston backend rootfs helper
+source ${G_VARISCITE_PATH}/weston_rootfs.sh
+source ${G_VARISCITE_PATH}/linux-headers_debian_src/create_kernel_tree.sh
 
 PARAM_DEB_LOCAL_MIRROR="${DEF_DEBIAN_MIRROR}"
 G_CROSS_COMPILER_PATH="${G_TOOLS_PATH}/${G_CROSS_COMPILER_NAME}/bin"
@@ -533,59 +517,6 @@ function clean_uboot()
 	make ARCH=${ARCH_ARGS} -C ${1}/ mrproper
 }
 
-# verify the SD card
-# $1 -- block device
-function check_sdcard()
-{
-	# Check that parameter is a valid block device
-	if [ ! -b "$1" ]; then
-		pr_error "$1 is not a valid block device, exiting"
-		return 1
-	fi
-
-	local dev=$(basename $1)
-
-	# Check that /sys/block/$dev exists
-	if [ ! -d /sys/block/$dev ]; then
-		pr_error "Directory /sys/block/${dev} missing, exiting"
-		return 1
-	fi
-
-	# Get device parameters
-	local removable=$(cat /sys/block/${dev}/removable)
-	local block_size=$(cat /sys/class/block/${dev}/queue/physical_block_size)
-	local size_bytes=$((${block_size}*$(cat /sys/class/block/${dev}/size)))
-	local size_gib=$(bc <<< "scale=1; ${size_bytes}/(1024*1024*1024)")
-
-	# Non removable SD card readers require additional check
-	if [ "${removable}" != "1" ]; then
-		local drive=$(udisksctl info -b /dev/${dev}|grep "Drive:"|cut -d"'" -f 2)
-		local mediaremovable=$(gdbus call --system --dest org.freedesktop.UDisks2 --object-path ${drive} \
-			--method org.freedesktop.DBus.Properties.Get org.freedesktop.UDisks2.Drive MediaRemovable)
-		if [[ "${mediaremovable}" = *"true"* ]]; then
-			removable=1
-		fi
-	fi
-
-	# Check that device is either removable or loop
-	if [ "$removable" != "1" -a $(stat -c '%t' /dev/$dev) != ${LOOP_MAJOR} ]; then
-		pr_error "$1 is not a removable device, exiting"
-		return 1
-	fi
-
-	# Check that device is attached
-	if [ ${size_bytes} -eq 0 ]; then
-		pr_error "$1 is not attached, exiting"
-		return 1
-	fi
-
-	pr_info "Device: ${LPARAM_BLOCK_DEVICE}, ${size_gib}GiB"
-	echo "============================================="
-	read -p "Press Enter to continue"
-
-	return 0
-}
-
 # make imx sdma firmware
 # $1 -- linux-firmware directory
 # $2 -- rootfs output dir
@@ -626,7 +557,8 @@ local ROOTFS_BASE=$2
 	# Repackaging with Variscite customizations.
 	pr_info "Repackaging with Variscite customizations"
 	if [ -d "${ROOTFS_BASE}" ] && [ "$(ls -A ${ROOTFS_BASE})" ]; then
-    	tar czvf ${PARAM_OUTPUT_DIR}/rootfs-variscite.tar.gz -C ${ROOTFS_BASE} .
+    	umount ${ROOTFS_BASE}/{sys,proc,dev/pts,dev} 2>/dev/null || true
+    	tar czvf ${PARAM_OUTPUT_DIR}/rootfs-variscite.tar.gz --exclude=sys --exclude=proc --exclude=dev ${ROOTFS_BASE}
 	else
     	echo "Error: The directory ${ROOTFS_BASE}  does not exist or is empty."
     	exit 1
