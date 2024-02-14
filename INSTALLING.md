@@ -69,7 +69,7 @@ All commandos are run from within `src/kernel/`:
 To use the linaro toolchain set
 
 ```
-export CROSS_COMPILE=$(pwd)/../toolchain/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
+export CROSS_COMPILE=$(pwd)/../../toolchain/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 export ARCH=arm64
 ```
 
