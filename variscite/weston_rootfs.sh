@@ -220,9 +220,7 @@ Pin-Priority: 600
 # Don't check valid until for snapshot releases
 echo "Acquire::Check-Valid-Until no;" > etc/apt/apt.conf.d/99no-check-valid-until
 
-echo "
-/dev/root            /                    auto       defaults              1  1
-" > etc/fstab
+install -m 0644 ${G_VARISCITE_PATH}/fstab etc/fstab
 
 echo "${MACHINE}" > etc/hostname
 
