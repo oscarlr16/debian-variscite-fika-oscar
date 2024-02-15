@@ -18,3 +18,6 @@ rm rotated_$1
 new_md5=$(md5sum ${script_path}/src/kernel/drivers/video/logo/logo_meticulous_clut224.ppm | awk '{ print $1 }' )
 echo "Old md5=$old_md5"
 echo "New md5=$new_md5"
+
+cp -v $1 ${script_path}/variscite/wallpaper.png
+cp -v $1 ${script_path}/variscite/wallpaper_hd.png
