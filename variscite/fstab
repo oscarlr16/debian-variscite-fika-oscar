@@ -8,3 +8,4 @@
 /dev/root                        /                    auto       defaults              1  1
 /dev/disk/by-partlabel/uboot_env /boot/env            auto       defaults              1  1
 /dev/disk/by-partlabel/user      /meticulous-user     auto       defaults              1  1
+/meticulous-user/syslog          /var/log             none       bind                  1  1
